@@ -13,7 +13,6 @@ import time
 import functools
 from pathlib import Path
 
-
 load_dotenv()
 
 api_key = os.getenv("FMP_API_KEY")
@@ -21,8 +20,7 @@ api_key = os.getenv("FMP_API_KEY")
 if not api_key:
     raise ValueError("FMP_API_KEY not found. Did you create a .env file?")
 
-if not Path("logs/").exists:
-    os.makedirs("logs/", exist_ok=True)
+Path("logs").mkdir(exist_ok=True)
 
 logging.basicConfig(
     level = logging.INFO,
@@ -35,6 +33,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+BASE_URL = "https://financialmodelingprep.com/api/v3"
 
 def should_retry(exception) -> bool:
     if isinstance(exception, requests.exceptions.ConnectionError):
@@ -98,9 +97,29 @@ def call_api(url: str, params: dict, api_key: str) -> dict:
 
 fmp_get = functools.partial(call_api, api_key=api_key)
 
-def fetch_transcript(ticker: str, year: int, quarter:int, api_key:str ) -> dict:
+def fetch_transcript(ticker: str, year: int, quarter:int) -> dict:
     """
     Fetches a single earnings call transcript.
     Returns raw dict — no transformation here.
     Raises on failure — let the caller handle errors.
     """
+    logger.info(f"Fetching transcript: {ticker} Q{quarter} {year}")
+
+    url = f"{BASE_URL}/earning_call_transcript/{ticker}"
+    params={"year":year,"quarter":quarter}
+
+    raw = fmp_get(url=url, params=params)
+
+    if not isinstance(raw, list):
+        raise ValueError(f"Expected list from FMP, got {type(raw)} for {ticker} Q{quarter} {year}")
+    
+    if not raw:
+        raise ValueError(f"No transcript found for {ticker} Q{quarter} {year}")
+    
+    transcript = raw[0]
+
+
+    word_count = len(transcript.get("content", "").split())
+    logger.info(f"Fetched {ticker} Q{quarter} {year} — {word_count} words")
+    
+    return transcript
